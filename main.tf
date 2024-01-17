@@ -49,10 +49,61 @@ resource "aws_subnet" "private" {
     availability_zone = data.aws_availability_zones.availability_zone.names[count.index]
 }
 
+#IGW
+resource "aws_internet_gateway" "main_IGW" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    "Name" = "${var.default_tags.env}-IGW"
+  }
+}
+
 #Public RT
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    "Name" = "${var.default_tags.env}-PublicRT"
+  }
+}
+
+#route for public RT
+resource "aws_route" "public" {
+  route_table_id = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id = aws_internet_gateway.main_IGW.id
+}
+
+#public route table association
+resource "aws_route_table_association" "public" {
+  count = var.public_subnet_count
+  subnet_id = element(aws_subnet.public.*.id, count.index)
+  route_table_id = aws_route_table.public.id
+}
 
 #Private RT
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+  tags   = {
+    Name = "${var.default_tags.env}-PrivateRT"
+  }
+}
 
-#IGW
+#private route
+resource "aws_route" "private" {
+  route_table_id = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id = aws_nat_gateway.main_NAT.id
+}
+
+# EIP
+resource "aws_eip" "NAT_EIP" {
+  domain = "vpc"
+}
 
 # NAT
+resource "aws_nat_gateway" "main_NAT" {
+  allocation_id = aws_eip.NAT_EIP.id
+  subnet_id     = aws_subnet.public.0.id
+  tags = {
+    "Name" = "${var.default_tags.env}-NGW"
+  }
+}
